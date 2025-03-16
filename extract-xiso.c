@@ -504,8 +504,11 @@
 
 #define DEBUG_DUMP_DIRECTORY			"/Volumes/c/xbox/iso/exiso"
 
-#define GETOPT_STRING					"c:d:Dhlmp:qQrsvx"
+#define GETOPT_STRING					"c:d:Dhlmp:qQrsvxX"
 
+
+// Global variable added for -X switch (MODIFIED)
+static bool s_extract_only_default = false;
 
 typedef enum avl_skew { k_no_skew , k_left_skew , k_right_skew } avl_skew;
 typedef enum avl_result { no_err, k_avl_error, k_avl_balanced } avl_result;
@@ -726,6 +729,15 @@ int main( int argc, char **argv ) {
 				printf( "%s", banner );
 				exit( 0 );
 			} break;
+            // New case for -X option (MODIFIED)
+            case 'X': {
+                if (!extract || rewrite || create) {
+                    usage();
+                    exit(1);
+                }
+                s_extract_only_default = true;
+                x_seen = true; // ensure extraction mode is active
+            } break;
 			
 			case 'x': {
 				if ( ! extract || rewrite || create ) {
@@ -1335,19 +1347,30 @@ left_processed:
 			if ( ! err ) {
 				if ( !s_remove_systemupdate || !strstr( in_path, s_systemupdate ) )
 				{
-
-				if ( in_mode == k_extract ) {
-						err = extract_file( in_xiso, dir, in_mode, in_path );
-				} else {
-					exiso_log( "%s%s%s (%u bytes)%s", in_mode == k_extract ? "extracting " : "", in_path, dir->filename, dir->file_size , "" ); flush();
-					exiso_log( "\n" );
+                if ( in_mode == k_extract ) {
+                    // MODIFIED: If the -X option is set, only extract "default.xbe"
+                    if (s_extract_only_default) {
+                        if (strcasecmp(dir->filename, "default.xbe") == 0) {
+                            err = extract_file( in_xiso, dir, in_mode, in_path );
+                            ++s_total_files;
+                            ++s_total_files_all_isos;
+                            s_total_bytes += dir->file_size;
+                            s_total_bytes_all_isos += dir->file_size;
+                        } else {
+                            // Skip file not named "default.xbe"
+                        }
+                    } else {
+                        err = extract_file( in_xiso, dir, in_mode, in_path );
+                        ++s_total_files;
+                        ++s_total_files_all_isos;
+                        s_total_bytes += dir->file_size;
+                        s_total_bytes_all_isos += dir->file_size;
+                    }
+                } else {
+					exiso_log("%s%s%s (%u bytes)%s", in_mode == k_extract ? "extracting " : "", in_path, dir->filename, dir->file_size , ""); flush();
+					exiso_log("\n");
 				}
-
-				++s_total_files;
-				++s_total_files_all_isos;
-				s_total_bytes += dir->file_size;
-				s_total_bytes_all_isos += dir->file_size;
-				}
+			}
 			}
 		}
 	}
